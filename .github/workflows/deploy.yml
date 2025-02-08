@@ -1,0 +1,77 @@
+name: Deploy terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Create resources?'
+        type: choice
+        options:
+          - yes_sure
+          - God_forbid
+
+  push:
+    branches: [main]
+
+  pull_request:
+    branches: [main]
+
+jobs:
+  plan:
+    name: Plan
+    if: ${{ github.event.inputs.action != 'God_forbid' }}
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Plan infra and cluster eks
+        run: |
+          terraform fmt -recursive
+          terraform init
+          terraform plan -var='aws_region=${{ vars.AWS_REGION }}'
+
+      - name: Validate alb controller
+        run: |
+          cd albController
+          terraform fmt -recursive
+          terraform init
+          terraform validate
+
+  deploy:
+    name: Deploy
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event.inputs.action != 'God_forbid'
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Apply infra and cluster eks
+        run: |
+          terraform fmt -recursive
+          terraform init
+          terraform apply -var='aws_region=${{ vars.AWS_REGION }}' --auto-approve
+
+      - name: Apply alb controller
+        run: |
+          cd albController
+          terraform fmt -recursive
+          terraform init
+          terraform apply -var='aws_region=${{ vars.AWS_REGION }}' --auto-approve
