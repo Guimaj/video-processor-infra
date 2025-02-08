@@ -2,6 +2,14 @@ name: Deploy terraform
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: 'Create resources?'
+        type: choice
+        options:
+          - yes_sure
+          - God_forbid
+
   push:
     branches: [main]
 
@@ -11,6 +19,7 @@ on:
 jobs:
   plan:
     name: Plan
+    if: ${{ github.event.inputs.action != 'God_forbid' }}
     runs-on: ubuntu-20.04
 
     steps:
@@ -40,7 +49,7 @@ jobs:
   deploy:
     name: Deploy
     needs: plan
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event.inputs.action != 'God_forbid'
     runs-on: ubuntu-20.04
 
     steps:
